@@ -31,6 +31,20 @@ function commandExists(command) {
     return check.ok;
 }
 
+function getBackupArchiveType(archiveName) {
+    const lowerName = archiveName.toLowerCase();
+    if (lowerName.endsWith('.tar.gz')) {
+        return 'tar.gz';
+    }
+    if (lowerName.endsWith('.tgz')) {
+        return 'tgz';
+    }
+    if (lowerName.endsWith('.zip')) {
+        return 'zip';
+    }
+    return null;
+}
+
 function getUnixTimestamp() {
     return Math.floor(Date.now() / 1000);
 }
@@ -87,7 +101,7 @@ function pruneOldBackups(backupsDir, keepLatest = 0) {
 
     const backups = fs
         .readdirSync(backupsDir)
-        .filter((name) => name.toLowerCase().endsWith('.zip'))
+        .filter((name) => getBackupArchiveType(name) !== null)
         .map((name) => ({
             name,
             fullPath: path.join(backupsDir, name),
@@ -111,9 +125,17 @@ function createFullBackupZip(options = {}) {
     fs.mkdirSync(backupsDir, { recursive: true });
 
     const timestamp = getUnixTimestamp();
-    const backupFileName = `backup-${timestamp}.zip`;
+    const hasZip = process.platform === 'win32' || commandExists('zip');
+    const hasTar = process.platform !== 'win32' && commandExists('tar');
+
+    if (!hasZip && !hasTar) {
+        throw new Error('Backup failed: neither "zip" nor "tar" command is available');
+    }
+
+    const extension = hasZip ? 'zip' : 'tar.gz';
+    const backupFileName = `backup-${timestamp}.${extension}`;
     const backupFilePath = path.join(backupsDir, backupFileName);
-    const tempBackupFilePath = path.join(os.tmpdir(), `discord-management-bot-backup-${timestamp}.zip`);
+    const tempBackupFilePath = path.join(os.tmpdir(), `discord-management-bot-backup-${timestamp}.${extension}`);
 
     if (fs.existsSync(tempBackupFilePath)) {
         fs.unlinkSync(tempBackupFilePath);
@@ -139,13 +161,16 @@ function createFullBackupZip(options = {}) {
     }
 
     if (process.platform !== 'win32') {
-        if (!commandExists('zip')) {
-            throw new Error('Backup failed: "zip" command is not available');
-        }
-
-        const zipResult = runCommand('zip', ['-rq', tempBackupFilePath, '.'], REPO_ROOT);
-        if (!zipResult.ok) {
-            throw new Error(`Backup failed: ${zipResult.stderr.trim() || zipResult.stdout.trim()}`);
+        if (hasZip) {
+            const zipResult = runCommand('zip', ['-rq', tempBackupFilePath, '.'], REPO_ROOT);
+            if (!zipResult.ok) {
+                throw new Error(`Backup failed: ${zipResult.stderr.trim() || zipResult.stdout.trim()}`);
+            }
+        } else {
+            const tarResult = runCommand('tar', ['-czf', tempBackupFilePath, '.'], REPO_ROOT);
+            if (!tarResult.ok) {
+                throw new Error(`Backup failed: ${tarResult.stderr.trim() || tarResult.stdout.trim()}`);
+            }
         }
     }
 
@@ -274,7 +299,7 @@ async function checkAndPromptForUpdatesOnStartup(options = {}) {
         }
 
         if (backupEnabled) {
-            console.log('[updater] Creating full backup zip before update...');
+            console.log('[updater] Creating full backup archive before update...');
             const backupPath = createFullBackupZip({
                 backupDirectory,
                 keepLatest: backupKeepLatest

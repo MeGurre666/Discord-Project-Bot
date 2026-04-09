@@ -34,6 +34,20 @@ function runCommand(command, args, cwd = REPO_ROOT, options = {}) {
     };
 }
 
+function getBackupArchiveType(archiveName) {
+    const lowerName = archiveName.toLowerCase();
+    if (lowerName.endsWith('.tar.gz')) {
+        return 'tar.gz';
+    }
+    if (lowerName.endsWith('.tgz')) {
+        return 'tgz';
+    }
+    if (lowerName.endsWith('.zip')) {
+        return 'zip';
+    }
+    return null;
+}
+
 function listBackups() {
     if (!fs.existsSync(BACKUPS_DIR)) {
         return [];
@@ -41,7 +55,7 @@ function listBackups() {
 
     return fs
         .readdirSync(BACKUPS_DIR)
-        .filter((name) => name.toLowerCase().endsWith('.zip'))
+        .filter((name) => getBackupArchiveType(name) !== null)
         .map((name) => {
             const fullPath = path.join(BACKUPS_DIR, name);
             const stat = fs.statSync(fullPath);
@@ -92,7 +106,7 @@ function askQuestion(rl, question) {
 
 async function chooseBackup(backups) {
     if (backups.length === 0) {
-        throw new Error('No backup zip files found in backups/.');
+        throw new Error('No backup archive files found in backups/.');
     }
 
     if (!process.stdin.isTTY || !process.stdout.isTTY) {
@@ -135,6 +149,11 @@ async function confirmRollback(targetFileName) {
 }
 
 function restoreFromZip(zipPath) {
+    const archiveType = getBackupArchiveType(zipPath);
+    if (!archiveType) {
+        throw new Error(`Unsupported backup format: ${path.basename(zipPath)}`);
+    }
+
     const restoreTempDir = path.join(os.tmpdir(), `discord-bot-rollback-${Date.now()}`);
     fs.mkdirSync(restoreTempDir, { recursive: true });
 
@@ -159,14 +178,26 @@ function restoreFromZip(zipPath) {
         return;
     }
 
-    const unzipCheck = runCommand('unzip', ['-v']);
-    if (!unzipCheck.ok) {
-        throw new Error('Rollback failed: "unzip" command is required on non-Windows systems.');
-    }
+    if (archiveType === 'zip') {
+        const unzipCheck = runCommand('unzip', ['-v']);
+        if (!unzipCheck.ok) {
+            throw new Error('Rollback failed: "unzip" command is required to restore .zip backups on non-Windows systems.');
+        }
 
-    const unzipResult = runCommand('unzip', ['-o', zipPath, '-d', restoreTempDir]);
-    if (!unzipResult.ok) {
-        throw new Error(`Rollback failed: ${unzipResult.stderr.trim() || unzipResult.stdout.trim()}`);
+        const unzipResult = runCommand('unzip', ['-o', zipPath, '-d', restoreTempDir]);
+        if (!unzipResult.ok) {
+            throw new Error(`Rollback failed: ${unzipResult.stderr.trim() || unzipResult.stdout.trim()}`);
+        }
+    } else {
+        const tarCheck = runCommand('tar', ['--version']);
+        if (!tarCheck.ok) {
+            throw new Error('Rollback failed: "tar" command is required to restore .tar.gz backups on non-Windows systems.');
+        }
+
+        const tarResult = runCommand('tar', ['-xzf', zipPath, '-C', restoreTempDir]);
+        if (!tarResult.ok) {
+            throw new Error(`Rollback failed: ${tarResult.stderr.trim() || tarResult.stdout.trim()}`);
+        }
     }
 
     for (const entry of fs.readdirSync(REPO_ROOT, { withFileTypes: true })) {
@@ -209,7 +240,7 @@ async function resolveTargetBackup(options, backups) {
 
     if (options.latest) {
         if (backups.length === 0) {
-            throw new Error('No backup zip files found in backups/.');
+            throw new Error('No backup archive files found in backups/.');
         }
         return backups[0];
     }
