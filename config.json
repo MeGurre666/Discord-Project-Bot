@@ -1,0 +1,33 @@
+{
+    "states": {
+        "debug": false,
+        "syncDatabaseOnReady": true,
+        "syncMessageHistory": true,
+        "deployCommandsOnReady": true,
+        "loadCogs": true
+    },
+    "cogs": {
+        "enabled": [],
+        "disabled": []
+    },
+    "logging": {
+        "quietDotenv": true,
+        "dbActionConsole": false,
+        "syncSummary": true,
+        "startupDetails": true
+    },
+    "startup": {
+        "initialSyncDelayMs": 1000,
+        "activity": {
+            "status": "online",
+            "text": "Managing the server",
+            "type": "Watching"
+        }
+    },
+    "messageHistory": {
+        "batchLimit": 100,
+        "pauseMs": 300,
+        "channelConcurrency": 2,
+        "useCheckpoint": true
+    }
+}
