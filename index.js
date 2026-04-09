@@ -1,6 +1,19 @@
 const { ShardingManager } = require('discord.js');
+const { getBoolean } = require('./utils/config');
 const { checkAndPromptForUpdatesOnStartup } = require('./utils/updater');
-const { getBoolean, getNumber, getString } = require('./utils/config');
+const { getNumber, getString } = require('./utils/config');
+
+const quietDotenv = getBoolean('logging.quietDotenv', true);
+
+try {
+    require('@dotenvx/dotenvx').config({ quiet: quietDotenv });
+} catch (error) {
+    if (error?.code === 'ENOENT' && error?.path?.includes('dotenvx-ops')) {
+        console.warn('[dotenvx] Radar feature unavailable on Windows - continuing without observability');
+    } else {
+        throw error;
+    }
+}
 
 async function start() {
     const updateCheckEnabled = getBoolean('updates.checkOnStartup', true);
