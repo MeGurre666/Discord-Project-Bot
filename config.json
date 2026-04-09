@@ -29,5 +29,17 @@
         "pauseMs": 300,
         "channelConcurrency": 2,
         "useCheckpoint": true
+    },
+    "updates": {
+        "checkOnStartup": true,
+        "notifyOnUpdate": true,
+        "branch": "main",
+        "confirmKeyword": "y",
+        "installDependenciesAfterUpdate": true,
+        "backups": {
+            "enabled": true,
+            "directory": "backups",
+            "keepLatest": 10
+        }
     }
 }

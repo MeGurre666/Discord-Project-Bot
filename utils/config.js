@@ -24,7 +24,6 @@ function toBoolean(value, fallback = false) {
 
 function getConfig() {
     try {
-        // Use require for simple JSON loading and Node cache behavior.
         return require(configPath);
     } catch (error) {
         return {};
