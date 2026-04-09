@@ -4,8 +4,8 @@ module.exports = [
     {
         name: Events.ClientReady,
         once: true,
-        execute: async (ready => {
+        execute: async (ready) => {
             console.log(`Logged in as ${ready.user.tag}!`);
-        })
+        }
     }
 ];
