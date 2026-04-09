@@ -1,1 +1,1 @@
-{"dependencies":{"@dotenvx/dotenvx":"^1.52.0","@dotenvx/dotenvx-ops":"^0.30.3","discord.js":"^14.25.1","mongodb":"^7.1.0"}}
+{"dependencies":{"@dotenvx/dotenvx":"^1.52.0","@dotenvx/dotenvx-ops":"^0.30.3","discord.js":"^14.26.2","mongodb":"^7.1.0"}}
