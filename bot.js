@@ -80,7 +80,44 @@ function getJavaScriptFiles(directoryPath) {
         }
     }
 
-    return files;
+    return files.sort((leftPath, rightPath) => leftPath.localeCompare(rightPath));
+}
+
+function getCogLoadTargets(enabledCogs = []) {
+    const cogsBasePath = path.join(__dirname, 'cogs');
+
+    return enabledCogs.map((cogName) => {
+        const basePath = path.join(cogsBasePath, cogName);
+        const commandPath = path.join(basePath, 'commands');
+        const eventPath = path.join(basePath, 'events');
+
+        return {
+            name: cogName,
+            basePath,
+            commandPath,
+            eventPath,
+            hasCommands: fs.existsSync(commandPath),
+            hasEvents: fs.existsSync(eventPath)
+        };
+    });
+}
+
+function logCogFolderSummary(cogTargets = []) {
+    if (!startupDetailsEnabled) {
+        return;
+    }
+
+    if (cogTargets.length === 0) {
+        console.log('[INFO] Cog folders: none loaded');
+        return;
+    }
+
+    console.log('[INFO] Cog folders:');
+    for (const cogTarget of cogTargets) {
+        const commandFolderStatus = cogTarget.hasCommands ? 'commands' : 'no-commands';
+        const eventFolderStatus = cogTarget.hasEvents ? 'events' : 'no-events';
+        console.log(` - ${cogTarget.name}/ (${commandFolderStatus}, ${eventFolderStatus})`);
+    }
 }
 
 function getEnabledCogFolders() {
@@ -102,16 +139,38 @@ function getEnabledCogFolders() {
         return [];
     }
 
-    const enabledSet = Array.isArray(explicitlyEnabled) && explicitlyEnabled.length > 0
-        ? new Set(explicitlyEnabled.map(String))
-        : new Set(allCogs);
+    const normalizeCogName = (value) => String(value || '').trim().toLowerCase();
+    const allCogsByNormalizedName = new Map(allCogs.map((name) => [normalizeCogName(name), name]));
+    const hasExplicitEnabledList = Array.isArray(explicitlyEnabled);
+
+    // If cogs.enabled exists (even as []), treat it as an authoritative allowlist.
+    const enabledSet = hasExplicitEnabledList
+        ? new Set(explicitlyEnabled.map(normalizeCogName).filter(Boolean))
+        : new Set(allCogs.map(normalizeCogName));
     const disabledSet = new Set(
         Array.isArray(explicitlyDisabled)
-            ? explicitlyDisabled.map(String)
+            ? explicitlyDisabled.map(normalizeCogName).filter(Boolean)
             : []
     );
 
-    const selectedCogs = allCogs.filter(cogName => enabledSet.has(cogName) && !disabledSet.has(cogName));
+    const selectedCogs = allCogs.filter((cogName) => {
+        const normalizedName = normalizeCogName(cogName);
+        return enabledSet.has(normalizedName) && !disabledSet.has(normalizedName);
+    });
+
+    if (startupDetailsEnabled && hasExplicitEnabledList) {
+        const unknownEnabledCogs = [...enabledSet].filter((name) => !allCogsByNormalizedName.has(name));
+        if (unknownEnabledCogs.length > 0) {
+            console.warn(`[WARNING] Unknown cogs listed in cogs.enabled: ${unknownEnabledCogs.join(', ')}`);
+        }
+    }
+
+    if (startupDetailsEnabled && Array.isArray(explicitlyDisabled)) {
+        const unknownDisabledCogs = [...disabledSet].filter((name) => !allCogsByNormalizedName.has(name));
+        if (unknownDisabledCogs.length > 0) {
+            console.warn(`[WARNING] Unknown cogs listed in cogs.disabled: ${unknownDisabledCogs.join(', ')}`);
+        }
+    }
 
     if (startupDetailsEnabled) {
         if (selectedCogs.length === 0) {
@@ -124,18 +183,22 @@ function getEnabledCogFolders() {
     return selectedCogs;
 }
 
-const loadCommands = (enabledCogs = []) => {
+const loadCommands = (cogTargets = []) => {
     try {
         const commandRoots = [{
             rootType: 'base',
             rootPath: path.join(__dirname, 'commands')
         }];
 
-        for (const cogName of enabledCogs) {
+        for (const cogTarget of cogTargets) {
+            if (!cogTarget.hasCommands) {
+                continue;
+            }
+
             commandRoots.push({
                 rootType: 'cog',
-                cogName,
-                rootPath: path.join(__dirname, 'cogs', cogName, 'commands')
+                cogName: cogTarget.name,
+                rootPath: cogTarget.commandPath
             });
         }
 
@@ -187,18 +250,22 @@ const loadCommands = (enabledCogs = []) => {
     }
 };
 
-const loadEvents = (enabledCogs = []) => {
+const loadEvents = (cogTargets = []) => {
     try {
         const eventRoots = [{
             rootType: 'base',
             rootPath: path.join(__dirname, 'events')
         }];
 
-        for (const cogName of enabledCogs) {
+        for (const cogTarget of cogTargets) {
+            if (!cogTarget.hasEvents) {
+                continue;
+            }
+
             eventRoots.push({
                 rootType: 'cog',
-                cogName,
-                rootPath: path.join(__dirname, 'cogs', cogName, 'events')
+                cogName: cogTarget.name,
+                rootPath: cogTarget.eventPath
             });
         }
 
@@ -301,9 +368,12 @@ const init = async () => {
         }
 
         const enabledCogs = getEnabledCogFolders();
-        
-        loadCommands(enabledCogs);
-        loadEvents(enabledCogs);
+        const cogTargets = getCogLoadTargets(enabledCogs);
+
+        logCogFolderSummary(cogTargets);
+
+        loadCommands(cogTargets);
+        loadEvents(cogTargets);
 
         client.once(Events.ClientReady, async () => {
             try {
