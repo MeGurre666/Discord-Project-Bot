@@ -187,22 +187,60 @@ function createFullBackupZip(options = {}) {
     return backupFilePath;
 }
 
-function promptForUpdateConfirmation(confirmKeyword = 'y') {
+function promptForUpdateConfirmation(timeoutMs = 10_000) {
     return new Promise((resolve) => {
         if (!process.stdin.isTTY || !process.stdout.isTTY) {
             resolve(false);
             return;
         }
 
+        const confirmKeyword = 'y';
+        const declineKeyword = 'n';
+        const timeoutSeconds = Math.max(1, Math.ceil(timeoutMs / 1000));
+
         const rl = readline.createInterface({
             input: process.stdin,
             output: process.stdout
         });
 
-        rl.question(`Update available. Type "${confirmKeyword}" to backup and install now: `, (answer) => {
+        let settled = false;
+        const timeoutHandle = setTimeout(() => {
+            if (settled) {
+                return;
+            }
+
+            settled = true;
             rl.close();
-            resolve(String(answer).trim().toLowerCase() === String(confirmKeyword).toLowerCase());
-        });
+            console.log(`\n[updater] No input received in ${timeoutSeconds} seconds. Skipping update.`);
+            resolve(false);
+        }, timeoutMs);
+
+        rl.question(
+            `Update available. Type "${confirmKeyword}" to backup and install now, or "${declineKeyword}" to skip (auto-skip in ${timeoutSeconds}s): `,
+            (answer) => {
+                if (settled) {
+                    return;
+                }
+
+                settled = true;
+                clearTimeout(timeoutHandle);
+                rl.close();
+
+                const normalizedAnswer = String(answer).trim().toLowerCase();
+
+                if (normalizedAnswer === confirmKeyword) {
+                    resolve(true);
+                    return;
+                }
+
+                if (normalizedAnswer === declineKeyword) {
+                    resolve(false);
+                    return;
+                }
+
+                resolve(false);
+            }
+        );
     });
 }
 
@@ -262,7 +300,6 @@ async function checkAndPromptForUpdatesOnStartup(options = {}) {
         enabled = true,
         branch = 'main',
         notifyOnUpdate = true,
-        confirmKeyword = 'y',
         backupEnabled = true,
         backupDirectory = 'backups',
         backupKeepLatest = 0,
@@ -292,9 +329,9 @@ async function checkAndPromptForUpdatesOnStartup(options = {}) {
             console.log(`[updater] Update available (${updateState.localHash.slice(0, 7)} -> ${updateState.remoteHash.slice(0, 7)}).`);
         }
 
-        const shouldApply = await promptForUpdateConfirmation(confirmKeyword);
+        const shouldApply = await promptForUpdateConfirmation();
         if (!shouldApply) {
-            console.log('[updater] Update skipped by user input.');
+            console.log('[updater] Update skipped.');
             return;
         }
 

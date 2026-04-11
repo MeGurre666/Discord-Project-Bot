@@ -19,7 +19,6 @@ async function start() {
     const updateCheckEnabled = getBoolean('updates.checkOnStartup', true);
     const updateNotifyEnabled = getBoolean('updates.notifyOnUpdate', true);
     const updateBranch = getString('updates.branch', 'main');
-    const updateConfirmKeyword = getString('updates.confirmKeyword', 'y');
     const backupEnabled = getBoolean('updates.backups.enabled', true);
     const backupDirectory = getString('updates.backups.directory', 'backups');
     const backupKeepLatest = getNumber('updates.backups.keepLatest', 10, 0, 1000);
@@ -29,7 +28,6 @@ async function start() {
         enabled: updateCheckEnabled,
         notifyOnUpdate: updateNotifyEnabled,
         branch: updateBranch,
-        confirmKeyword: updateConfirmKeyword,
         backupEnabled,
         backupDirectory,
         backupKeepLatest,

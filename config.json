@@ -34,7 +34,6 @@
         "checkOnStartup": true,
         "notifyOnUpdate": true,
         "branch": "main",
-        "confirmKeyword": "y",
         "installDependenciesAfterUpdate": true,
         "backups": {
             "enabled": true,
